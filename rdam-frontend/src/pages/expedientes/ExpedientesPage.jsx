@@ -12,6 +12,44 @@ const ESTADOS = [
   "Expirado",
 ];
 
+// ── Helpers de validación ─────────────────────────────────────
+function validarForm(form) {
+  const errors = {};
+  if (!form.nombreCompleto.trim())
+    errors.nombreCompleto = "El nombre es obligatorio.";
+  if (!form.numeroIdentificacion.trim())
+    errors.numeroIdentificacion = "El número de documento es obligatorio.";
+  else if (!/^\d{7,8}$/.test(form.numeroIdentificacion.trim()))
+    errors.numeroIdentificacion = "Solo números, entre 7 y 8 dígitos.";
+  if (!form.email.trim())
+    errors.email = "El email es obligatorio.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+    errors.email = "Formato de email inválido.";
+  if (!form.montoAdeudado || Number(form.montoAdeudado) <= 0)
+    errors.montoAdeudado = "El monto debe ser mayor a 0.";
+  return errors;
+}
+
+// ── Input con error inline ────────────────────────────────────
+const InpErr = ({ label, error, required: req, style: extraStyle, ...props }) => (
+  <div style={{ marginBottom: 14, ...extraStyle }}>
+    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
+      {label}{req && <span style={{ color: "#dc2626", marginLeft: 2 }}>*</span>}
+    </label>
+    <input
+      {...props}
+      style={{
+        width: "100%", boxSizing: "border-box", padding: "9px 12px",
+        borderRadius: 8, fontSize: 14, fontFamily: "inherit",
+        border: `1.5px solid ${error ? "#dc2626" : "var(--border)"}`,
+        background: "var(--surface)", color: "var(--text-primary)",
+        outline: "none", transition: "border-color 0.15s",
+      }}
+    />
+    {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>⚠ {error}</div>}
+  </div>
+);
+
 // ── Formulario para nuevo expediente ──────────────────────────
 const FormNuevoExpediente = ({ onClose, onCreado, setToast }) => {
   const [form, setForm] = useState({
@@ -19,20 +57,47 @@ const FormNuevoExpediente = ({ onClose, onCreado, setToast }) => {
     email: "", telefono: "", montoAdeudado: "", periodoDeuda: "",
     beneficiarioNombre: "", beneficiarioParentesco: "", sede: "Santa Fe", observaciones: ""
   });
+  const [errors, setErrors]   = useState({});
+  const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }));
+    if (touched[k]) {
+      const e = validarForm({ ...form, [k]: v });
+      setErrors(prev => ({ ...prev, [k]: e[k] }));
+    }
+  };
+
+  const blur = (k) => {
+    setTouched(t => ({ ...t, [k]: true }));
+    const e = validarForm(form);
+    setErrors(prev => ({ ...prev, [k]: e[k] }));
+  };
 
   const handleSubmit = async () => {
-    if (!form.nombreCompleto || !form.numeroIdentificacion || !form.email || !form.montoAdeudado) {
-      setToast({ msg: "Complete los campos obligatorios.", type: "warning" });
+    const allErrors = validarForm(form);
+    setErrors(allErrors);
+    setTouched({ nombreCompleto: true, numeroIdentificacion: true, email: true, montoAdeudado: true });
+    if (Object.keys(allErrors).length > 0) {
+      setToast({ msg: "Corregí los errores antes de continuar.", type: "warning" });
       return;
     }
     setLoading(true);
     try {
       const body = {
-        deudor: { nombreCompleto: form.nombreCompleto, tipoIdentificacion: form.tipoIdentificacion, numeroIdentificacion: form.numeroIdentificacion, email: form.email, telefono: form.telefono },
-        deuda: { montoAdeudado: parseFloat(form.montoAdeudado), periodoDeuda: form.periodoDeuda, beneficiario: { nombre: form.beneficiarioNombre, parentesco: form.beneficiarioParentesco } },
+        deudor: {
+          nombreCompleto: form.nombreCompleto.trim(),
+          tipoIdentificacion: form.tipoIdentificacion,
+          numeroIdentificacion: form.numeroIdentificacion.trim(),
+          email: form.email.trim(),
+          telefono: form.telefono.trim(),
+        },
+        deuda: {
+          montoAdeudado: parseFloat(form.montoAdeudado),
+          periodoDeuda: form.periodoDeuda,
+          beneficiario: { nombre: form.beneficiarioNombre, parentesco: form.beneficiarioParentesco },
+        },
         sede: form.sede,
         observaciones: form.observaciones,
       };
@@ -50,27 +115,82 @@ const FormNuevoExpediente = ({ onClose, onCreado, setToast }) => {
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-        <div style={{ gridColumn: "1/-1" }}><strong style={{ color: "var(--text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Datos del Deudor</strong></div>
-        <Inp label="Nombre Completo" required placeholder="Juan Carlos Pérez" value={form.nombreCompleto} onChange={e => set("nombreCompleto", e.target.value)} />
-        <Sel label="Tipo Documento" required value={form.tipoIdentificacion} onChange={e => set("tipoIdentificacion", e.target.value)}>
-          <option>DNI</option><option>CEDULA</option><option>PASAPORTE</option>
-        </Sel>
-        <Inp label="Número Documento" required placeholder="12345678" value={form.numeroIdentificacion} onChange={e => set("numeroIdentificacion", e.target.value)} />
-        <Inp label="Email" required type="email" placeholder="juan@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
-        <Inp label="Teléfono" placeholder="+54 11 1234-5678" value={form.telefono} onChange={e => set("telefono", e.target.value)} />
-
-        <div style={{ gridColumn: "1/-1", marginTop: 8 }}><strong style={{ color: "var(--text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Datos de la Deuda</strong></div>
-        <Inp label="Monto Adeudado (ARS)" required type="number" placeholder="150000" value={form.montoAdeudado} onChange={e => set("montoAdeudado", e.target.value)} />
-        <Inp label="Período de Deuda" placeholder="Ene 2023 - Dic 2024" value={form.periodoDeuda} onChange={e => set("periodoDeuda", e.target.value)} />
-        <Inp label="Nombre del Beneficiario" placeholder="María Pérez" value={form.beneficiarioNombre} onChange={e => set("beneficiarioNombre", e.target.value)} />
-        <Inp label="Parentesco" placeholder="Hija" value={form.beneficiarioParentesco} onChange={e => set("beneficiarioParentesco", e.target.value)} />
-
-        <div style={{ gridColumn: "1/-1", marginTop: 8 }}><strong style={{ color: "var(--text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Información Adicional</strong></div>
-        <Sel label="Sede" required value={form.sede} onChange={e => set("sede", e.target.value)} style={{ gridColumn: "1/-1" }}>
-          {SEDES.map(s => <option key={s}>{s}</option>)}
-        </Sel>
         <div style={{ gridColumn: "1/-1" }}>
-          <Textarea label="Observaciones" placeholder="Detalles del caso..." value={form.observaciones} onChange={e => set("observaciones", e.target.value)} />
+          <strong style={{ color: "var(--text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Datos del Deudor</strong>
+        </div>
+
+        <div style={{ gridColumn: "1/-1" }}>
+          <InpErr label="Nombre Completo" required value={form.nombreCompleto}
+            onChange={e => set("nombreCompleto", e.target.value)}
+            onBlur={() => blur("nombreCompleto")}
+            error={errors.nombreCompleto} placeholder="Juan Carlos Pérez" />
+        </div>
+
+        <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
+            Tipo Documento
+          </label>
+          <select className="form-select" value={form.tipoIdentificacion} onChange={e => set("tipoIdentificacion", e.target.value)} style={{ width: "100%", marginBottom: 14 }}>
+            <option>DNI</option><option>CEDULA</option><option>PASAPORTE</option>
+          </select>
+        </div>
+
+        <InpErr label="Número Documento" required value={form.numeroIdentificacion}
+          onChange={e => set("numeroIdentificacion", e.target.value)}
+          onBlur={() => blur("numeroIdentificacion")}
+          error={errors.numeroIdentificacion} placeholder="12345678" />
+
+        <InpErr label="Email" required type="email" value={form.email}
+          onChange={e => set("email", e.target.value)}
+          onBlur={() => blur("email")}
+          error={errors.email} placeholder="juan@email.com" />
+
+        <InpErr label="Teléfono" value={form.telefono}
+          onChange={e => set("telefono", e.target.value)}
+          placeholder="+54 11 1234-5678" />
+
+        <div style={{ gridColumn: "1/-1", marginTop: 4 }}>
+          <strong style={{ color: "var(--text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Datos de la Deuda</strong>
+        </div>
+
+        <InpErr label="Monto Adeudado (ARS)" required type="number" min="1" value={form.montoAdeudado}
+          onChange={e => set("montoAdeudado", e.target.value)}
+          onBlur={() => blur("montoAdeudado")}
+          error={errors.montoAdeudado} placeholder="150000" />
+
+        <InpErr label="Período de Deuda" value={form.periodoDeuda}
+          onChange={e => set("periodoDeuda", e.target.value)}
+          placeholder="Ene 2023 - Dic 2024" />
+
+        <InpErr label="Nombre del Beneficiario" value={form.beneficiarioNombre}
+          onChange={e => set("beneficiarioNombre", e.target.value)}
+          placeholder="María Pérez" />
+
+        <InpErr label="Parentesco" value={form.beneficiarioParentesco}
+          onChange={e => set("beneficiarioParentesco", e.target.value)}
+          placeholder="Hija" />
+
+        <div style={{ gridColumn: "1/-1", marginTop: 4 }}>
+          <strong style={{ color: "var(--text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Información Adicional</strong>
+        </div>
+
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>Sede</label>
+          <select className="form-select" value={form.sede} onChange={e => set("sede", e.target.value)} style={{ width: "100%", marginBottom: 14 }}>
+            {SEDES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>Observaciones</label>
+          <textarea
+            className="form-input"
+            placeholder="Detalles del caso..."
+            value={form.observaciones}
+            onChange={e => set("observaciones", e.target.value)}
+            rows={3}
+            style={{ width: "100%", resize: "vertical", marginBottom: 14 }}
+          />
         </div>
       </div>
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
@@ -80,6 +200,7 @@ const FormNuevoExpediente = ({ onClose, onCreado, setToast }) => {
     </>
   );
 };
+
 
 // ── Página principal ───────────────────────────────────────────
 export default function ExpedientesPage({ onVerDetalle }) {

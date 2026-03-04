@@ -2,12 +2,38 @@ import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { Inp } from "../../components/ui.jsx";
 
+const ROL_CONFIG = {
+  Administrador: {
+    icon: "🔑",
+    color: "#d97706",
+    bg: "rgba(217,119,6,0.12)",
+    border: "rgba(217,119,6,0.45)",
+    activeText: "#92400e",
+    placeholder: "Ej: admin.rodriguez",
+    subtitulo: "Acceso completo al sistema",
+    gradient: "linear-gradient(135deg, #d97706, #f59e0b)",
+  },
+  Operador: {
+    icon: "👤",
+    color: "#2563eb",
+    bg: "rgba(37,99,235,0.1)",
+    border: "rgba(37,99,235,0.45)",
+    activeText: "#1e3a8a",
+    placeholder: "Ej: mfrancomano",
+    subtitulo: "RDAM — Uso exclusivo de personal autorizado",
+    gradient: "linear-gradient(135deg, #1e40af, #3b82f6)",
+  },
+};
+
 export default function LoginPage({ onBack }) {
   const { login } = useAuth();
+  const [rolSeleccionado, setRolSeleccionado] = useState("Operador");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const cfg = ROL_CONFIG[rolSeleccionado];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,20 +61,20 @@ export default function LoginPage({ onBack }) {
         fontFamily: "'Inter', system-ui, sans-serif",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 420 }} className="fade-in">
+      <div style={{ width: "100%", maxWidth: 440 }} className="fade-in">
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div
             style={{
-              width: 60,
-              height: 60,
-              background: "linear-gradient(135deg, #1e40af, #3b82f6)",
+              width: 60, height: 60,
+              background: cfg.gradient,
               borderRadius: 16,
               margin: "0 auto 16px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 8px 24px rgba(37,99,235,0.3)",
+              boxShadow: `0 8px 24px ${cfg.border}`,
+              transition: "all 0.3s ease",
             }}
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2">
@@ -59,9 +85,51 @@ export default function LoginPage({ onBack }) {
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 6px", letterSpacing: "-0.5px" }}>
             Acceso al Sistema
           </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: 14, margin: 0 }}>
-            RDAM — Uso exclusivo de personal autorizado
+          <p style={{ color: "var(--text-muted)", fontSize: 14, margin: 0, transition: "all 0.2s" }}>
+            {cfg.subtitulo}
           </p>
+        </div>
+
+        {/* ── Selector de Rol ── */}
+        <div style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 20,
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          padding: 5,
+        }}>
+          {["Administrador", "Operador"].map(rol => {
+            const isActive = rolSeleccionado === rol;
+            const c = ROL_CONFIG[rol];
+            return (
+              <button
+                key={rol}
+                onClick={() => { setRolSeleccionado(rol); setError(""); }}
+                style={{
+                  flex: 1,
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  border: isActive ? `1.5px solid ${c.border}` : "1.5px solid transparent",
+                  background: isActive ? c.bg : "transparent",
+                  color: isActive ? c.color : "var(--text-muted)",
+                  fontWeight: isActive ? 700 : 500,
+                  fontSize: 14,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 7,
+                }}
+              >
+                <span style={{ fontSize: 16 }}>{c.icon}</span>
+                {rol}
+              </button>
+            );
+          })}
         </div>
 
         {/* Card */}
@@ -69,7 +137,7 @@ export default function LoginPage({ onBack }) {
           <form onSubmit={handleSubmit}>
             <Inp
               label="Usuario"
-              placeholder="Ej: mfrancomano"
+              placeholder={cfg.placeholder}
               value={username}
               onChange={e => setUsername(e.target.value)}
               autoComplete="username"
@@ -109,7 +177,7 @@ export default function LoginPage({ onBack }) {
               style={{
                 width: "100%",
                 padding: "13px",
-                background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+                background: cfg.gradient,
                 color: "#fff",
                 border: "none",
                 borderRadius: 10,
@@ -122,12 +190,12 @@ export default function LoginPage({ onBack }) {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
-                transition: "all 0.18s",
-                boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
+                transition: "all 0.2s ease",
+                boxShadow: `0 4px 14px ${cfg.border}`,
               }}
             >
               {loading && <span className="spinner" style={{ width: 16, height: 16 }} />}
-              {loading ? "Ingresando..." : "Iniciar Sesión"}
+              {loading ? "Ingresando..." : `Ingresar como ${rolSeleccionado}`}
             </button>
           </form>
         </div>

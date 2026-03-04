@@ -2,9 +2,229 @@ import { useState, useEffect, useCallback } from "react";
 import { expedientesAPI, pagosAPI } from "../../api/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
-  Badge, Btn, Card, Modal, Inp, Textarea, PageSpinner,
+  Badge, Btn, Card, Modal, Inp, Sel, Textarea, PageSpinner,
   Alert, fmtMonto, fmtFecha, fmtFechaHora
 } from "../../components/ui.jsx";
+
+/* ── Validaciones ─────────────────────────────────────────── */
+const SEDES = ["Santa Fe", "Rosario", "Venado Tuerto", "Rafaela", "Reconquista"];
+
+function validarCamposDeudor(form) {
+  const errors = {};
+  if (!form.nombreCompleto?.trim())
+    errors.nombreCompleto = "El nombre es obligatorio.";
+  if (!form.numeroIdentificacion?.trim())
+    errors.numeroIdentificacion = "El número de documento es obligatorio.";
+  else if (!/^\d{7,8}$/.test(form.numeroIdentificacion.trim()))
+    errors.numeroIdentificacion = "Solo números, entre 7 y 8 dígitos.";
+  if (!form.email?.trim())
+    errors.email = "El email es obligatorio.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+    errors.email = "Formato de email inválido.";
+  if (!form.montoAdeudado || Number(form.montoAdeudado) <= 0)
+    errors.montoAdeudado = "El monto debe ser mayor a 0.";
+  return errors;
+}
+
+/* ── Campo con error inline ───────────────────────────────── */
+const InpValido = ({ label, error, ...props }) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
+      {label}
+    </label>
+    <input
+      {...props}
+      style={{
+        width: "100%", boxSizing: "border-box",
+        padding: "9px 12px", borderRadius: 8, fontSize: 14,
+        border: `1.5px solid ${error ? "#dc2626" : "var(--border)"}`,
+        background: "var(--surface)", color: "var(--text-primary)",
+        outline: "none", fontFamily: "inherit", transition: "border-color 0.15s",
+      }}
+    />
+    {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{error}</div>}
+  </div>
+);
+
+const SelValido = ({ label, error, children, ...props }) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
+      {label}
+    </label>
+    <select
+      {...props}
+      style={{
+        width: "100%", boxSizing: "border-box",
+        padding: "9px 12px", borderRadius: 8, fontSize: 14,
+        border: `1.5px solid ${error ? "#dc2626" : "var(--border)"}`,
+        background: "var(--surface)", color: "var(--text-primary)",
+        outline: "none", fontFamily: "inherit",
+      }}
+    >
+      {children}
+    </select>
+    {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{error}</div>}
+  </div>
+);
+
+/* ── Formulario de edición del deudor ─────────────────────── */
+function FormEditarDeudor({ exp, onClose, onGuardado, setToast }) {
+  const [form, setForm] = useState({
+    nombreCompleto:        exp.deudor?.nombreCompleto || "",
+    tipoIdentificacion:    exp.deudor?.tipoIdentificacion || "DNI",
+    numeroIdentificacion:  exp.deudor?.numeroIdentificacion || "",
+    email:                 exp.deudor?.email || "",
+    telefono:              exp.deudor?.telefono || "",
+    montoAdeudado:         exp.deuda?.montoAdeudado?.toString() || "",
+    periodoDeuda:          exp.deuda?.periodoDeuda || "",
+    beneficiarioNombre:    exp.deuda?.beneficiario?.nombre || "",
+    beneficiarioParentesco:exp.deuda?.beneficiario?.parentesco || "",
+    sede:                  exp.metadata?.sede || "Santa Fe",
+    observaciones:         exp.metadata?.observaciones || "",
+  });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState({});
+
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }));
+    // validar en tiempo real solo si el campo ya fue tocado
+    if (touched[k]) {
+      const newErrors = validarCamposDeudor({ ...form, [k]: v });
+      setErrors(prev => ({ ...prev, [k]: newErrors[k] }));
+    }
+  };
+
+  const blur = (k) => {
+    setTouched(t => ({ ...t, [k]: true }));
+    const newErrors = validarCamposDeudor(form);
+    setErrors(prev => ({ ...prev, [k]: newErrors[k] }));
+  };
+
+  const handleGuardar = async () => {
+    const allErrors = validarCamposDeudor(form);
+    setErrors(allErrors);
+    setTouched({ nombreCompleto: true, numeroIdentificacion: true, email: true, montoAdeudado: true });
+    if (Object.keys(allErrors).length > 0) return;
+
+    setLoading(true);
+    try {
+      const body = {
+        deudor: {
+          nombreCompleto:       form.nombreCompleto.trim(),
+          tipoIdentificacion:   form.tipoIdentificacion,
+          numeroIdentificacion: form.numeroIdentificacion.trim(),
+          email:                form.email.trim(),
+          telefono:             form.telefono.trim(),
+        },
+        deuda: {
+          montoAdeudado: parseFloat(form.montoAdeudado),
+          periodoDeuda:  form.periodoDeuda.trim(),
+          beneficiario: {
+            nombre:     form.beneficiarioNombre.trim(),
+            parentesco: form.beneficiarioParentesco.trim(),
+          },
+        },
+        sede:         form.sede,
+        observaciones: form.observaciones.trim(),
+      };
+      await expedientesAPI.actualizar(exp.id, body);
+      setToast({ msg: "✅ Datos actualizados correctamente.", type: "success" });
+      onGuardado();
+      onClose();
+    } catch (err) {
+      setToast({ msg: `Error al guardar: ${err.message}`, type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: 4 }}>
+      {/* Sección Deudor */}
+      <div style={{ marginBottom: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Datos del Deudor
+        </span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+        <div style={{ gridColumn: "1/-1" }}>
+          <InpValido label="Nombre Completo *" value={form.nombreCompleto}
+            onChange={e => set("nombreCompleto", e.target.value)}
+            onBlur={() => blur("nombreCompleto")}
+            error={errors.nombreCompleto} placeholder="Juan Carlos Pérez" />
+        </div>
+        <SelValido label="Tipo Documento" value={form.tipoIdentificacion}
+          onChange={e => set("tipoIdentificacion", e.target.value)}>
+          <option>DNI</option><option>CEDULA</option><option>PASAPORTE</option>
+        </SelValido>
+        <InpValido label="Número Documento *" value={form.numeroIdentificacion}
+          onChange={e => set("numeroIdentificacion", e.target.value)}
+          onBlur={() => blur("numeroIdentificacion")}
+          error={errors.numeroIdentificacion} placeholder="12345678" />
+        <InpValido label="Email *" type="email" value={form.email}
+          onChange={e => set("email", e.target.value)}
+          onBlur={() => blur("email")}
+          error={errors.email} placeholder="juan@email.com" />
+        <InpValido label="Teléfono" value={form.telefono}
+          onChange={e => set("telefono", e.target.value)}
+          placeholder="+54 11 1234-5678" />
+      </div>
+
+      {/* Sección Deuda */}
+      <div style={{ margin: "8px 0 6px" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Datos de la Deuda
+        </span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+        <InpValido label="Monto Adeudado (ARS) *" type="number" value={form.montoAdeudado}
+          onChange={e => set("montoAdeudado", e.target.value)}
+          onBlur={() => blur("montoAdeudado")}
+          error={errors.montoAdeudado} placeholder="150000" min="1" />
+        <InpValido label="Período de Deuda" value={form.periodoDeuda}
+          onChange={e => set("periodoDeuda", e.target.value)}
+          placeholder="Ene 2023 - Dic 2024" />
+        <InpValido label="Nombre del Beneficiario" value={form.beneficiarioNombre}
+          onChange={e => set("beneficiarioNombre", e.target.value)}
+          placeholder="María Pérez" />
+        <InpValido label="Parentesco" value={form.beneficiarioParentesco}
+          onChange={e => set("beneficiarioParentesco", e.target.value)}
+          placeholder="Hija" />
+      </div>
+
+      {/* Sección Adicional */}
+      <div style={{ margin: "8px 0 6px" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Información Adicional
+        </span>
+      </div>
+      <SelValido label="Sede *" value={form.sede} onChange={e => set("sede", e.target.value)}>
+        {SEDES.map(s => <option key={s}>{s}</option>)}
+      </SelValido>
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>Observaciones</label>
+        <textarea
+          value={form.observaciones}
+          onChange={e => set("observaciones", e.target.value)}
+          placeholder="Detalles del caso..."
+          rows={3}
+          style={{
+            width: "100%", boxSizing: "border-box", padding: "9px 12px",
+            borderRadius: 8, fontSize: 14, border: "1.5px solid var(--border)",
+            background: "var(--surface)", color: "var(--text-primary)",
+            outline: "none", fontFamily: "inherit", resize: "vertical",
+          }}
+        />
+      </div>
+
+      <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 4, borderTop: "1px solid var(--border)" }}>
+        <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
+        <Btn variant="primary" loading={loading} onClick={handleGuardar}>Guardar Cambios</Btn>
+      </div>
+    </div>
+  );
+}
 
 /* ── Fila de información ─────────────────────────────────── */
 const InfoRow = ({ label, value, mono }) => (
@@ -503,6 +723,7 @@ export default function DetalleExpedientePage({ expedienteId, onBack }) {
   const [toast, setToast] = useState(null);
   const [modAp, setModAp] = useState(false);
   const [modRe, setModRe] = useState(false);
+  const [modEditar, setModEditar] = useState(false);
   const [obs, setObs] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -586,7 +807,13 @@ export default function DetalleExpedientePage({ expedienteId, onBack }) {
 
           {/* Datos del deudor */}
           <Card>
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>Datos del Deudor</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Datos del Deudor</h2>
+              <Btn variant="outline" size="sm" onClick={() => setModEditar(true)}
+                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                ✏️ Editar
+              </Btn>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
               <InfoRow label="Nombre Completo" value={exp.deudor?.nombreCompleto} />
               <InfoRow label={exp.deudor?.tipoIdentificacion || "DNI"} value={exp.deudor?.numeroIdentificacion} mono />
@@ -731,6 +958,18 @@ export default function DetalleExpedientePage({ expedienteId, onBack }) {
           <Btn variant="outline" onClick={() => setModRe(false)}>Cancelar</Btn>
           <Btn variant="danger" loading={submitting} onClick={rechazar}>Confirmar Rechazo</Btn>
         </div>
+      </Modal>
+
+      {/* Modal Editar Deudor */}
+      <Modal open={modEditar} onClose={() => setModEditar(false)} title="Editar Datos del Deudor" width={680}>
+        {exp && (
+          <FormEditarDeudor
+            exp={exp}
+            onClose={() => setModEditar(false)}
+            onGuardado={cargar}
+            setToast={setToast}
+          />
+        )}
       </Modal>
     </div>
   );
