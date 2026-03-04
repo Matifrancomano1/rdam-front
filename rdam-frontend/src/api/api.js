@@ -114,7 +114,51 @@ export const expedientesAPI = {
 export const pagosAPI = {
   crearOrden: (expedienteId, monto, email) =>
     apiFetch("/pagos/crear-orden", { method: "POST", body: JSON.stringify({ expedienteId, monto, email }) }),
+  estadoPago: (pagoId) => apiFetch(`/pagos/${pagoId}/estado`),
 };
+
+// ── Portal Ciudadano (SIN autenticación) ───────────────────────
+async function publicFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options.headers },
+  });
+  if (res.status === 204) return { success: true };
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(data?.error?.message || data?.message || "Error del servidor");
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+export const portalAPI = {
+  // Consulta por DNI (público)
+  consultar: (dni) => publicFetch(`/portal/consultar?dni=${encodeURIComponent(dni)}`),
+  // Estado de un expediente vía token de pago (link enviado al deudor)
+  expedientePublico: (token) => publicFetch(`/portal/expediente?token=${encodeURIComponent(token)}`),
+  // Crear orden de pago PÚBLICA (ciudadano, sin JWT)
+  crearOrdenPublica: (expedienteId, monto, email) =>
+    publicFetch('/pagos/crear-orden-publica', {
+      method: 'POST',
+      body: JSON.stringify({ expedienteId, monto: Number(monto), email }),
+    }),
+  // Verificar resultado del pago por referencia (retorno desde pasarela)
+  verificarPago: (referencia) =>
+    publicFetch(`/pagos/estado-por-referencia/${encodeURIComponent(referencia)}`),
+  // Resultado del pago (retorno desde pasarela)
+  resultadoPago: (params) => {
+    const q = new URLSearchParams(params).toString();
+    return publicFetch(`/portal/resultado-pago?${q}`);
+  },
+  // Verificar un nro de certificado
+  verificarCertificado: (nro) => publicFetch(`/portal/verificar-certificado/${nro}`),
+};
+
+// ── URL de descarga directa de certificado (pública) ──────────
+export const certDownloadUrl = (expedienteId, token) =>
+  `${API_BASE}/portal/certificado/${expedienteId}${token ? `?token=${token}` : ""}`;
 
 // ── Usuarios ───────────────────────────────────────────────────
 export const usuariosAPI = {

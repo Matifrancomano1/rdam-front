@@ -1,6 +1,18 @@
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 
-// Permisos por rol
+// ── Sedes disponibles (igual que poc-rdam) ──────────────────
+const SEDES = [
+  { value: "Santa Fe",     label: "Santa Fe" },
+  { value: "Rosario",      label: "Rosario" },
+  { value: "Venado Tuerto",label: "Venado Tuerto" },
+  { value: "Rafaela",      label: "Rafaela" },
+  { value: "Reconquista",  label: "Reconquista" },
+];
+
+const SEDE_STORAGE_KEY = "rdam_sede_seleccionada";
+
+// ── Permisos por rol ────────────────────────────────────────
 export const PERMISOS = {
   Operador: ["dashboard", "expedientes", "pagos"],
   Administrador: ["dashboard", "expedientes", "pagos", "usuarios", "auditoria"],
@@ -74,6 +86,16 @@ export default function Sidebar({ vista, onVista }) {
   const { user, logout } = useAuth();
   const rol = user?.rol || "Operador";
 
+  // ── Estado de sede ────────────────────────────────────────
+  const [sede, setSede] = useState(
+    () => localStorage.getItem(SEDE_STORAGE_KEY) || "Santa Fe",
+  );
+
+  const cambiarSede = (nuevaSede) => {
+    setSede(nuevaSede);
+    localStorage.setItem(SEDE_STORAGE_KEY, nuevaSede);
+  };
+
   const itemsVisibles = NAV_ITEMS.filter((item) => item.roles.includes(rol));
 
   return (
@@ -83,13 +105,10 @@ export default function Sidebar({ vista, onVista }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
             style={{
-              width: 38,
-              height: 38,
+              width: 38, height: 38,
               background: "linear-gradient(135deg, #2563eb, #7c3aed)",
               borderRadius: 9,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,
             }}
           >
@@ -100,7 +119,8 @@ export default function Sidebar({ vista, onVista }) {
           </div>
           <div>
             <div className="sidebar-brand-name">RDAM</div>
-            <div className="sidebar-brand-sub">Santa Fe</div>
+            {/* Sede seleccionada aparece aquí también (como en el poc: "Santa Fe") */}
+            <div className="sidebar-brand-sub">{sede}</div>
           </div>
         </div>
       </div>
@@ -123,7 +143,12 @@ export default function Sidebar({ vista, onVista }) {
         {itemsVisibles.map((item) => (
           <button
             key={item.id}
-            className={`sidebar-nav-item${vista === item.id || vista === "expediente-detalle" && item.id === "expedientes" ? " active" : ""}`}
+            className={`sidebar-nav-item${
+              vista === item.id ||
+              (vista === "expediente-detalle" && item.id === "expedientes")
+                ? " active"
+                : ""
+            }`}
             onClick={() => onVista(item.id)}
           >
             {item.icon}
@@ -139,10 +164,15 @@ export default function Sidebar({ vista, onVista }) {
           style={{
             marginBottom: 12,
             padding: "6px 10px",
-            background: rol === "Administrador"
-              ? "rgba(217,119,6,0.15)"
-              : "rgba(37,99,235,0.15)",
-            border: `1px solid ${rol === "Administrador" ? "rgba(217,119,6,0.25)" : "rgba(37,99,235,0.25)"}`,
+            background:
+              rol === "Administrador"
+                ? "rgba(217,119,6,0.15)"
+                : "rgba(37,99,235,0.15)",
+            border: `1px solid ${
+              rol === "Administrador"
+                ? "rgba(217,119,6,0.25)"
+                : "rgba(37,99,235,0.25)"
+            }`,
             borderRadius: 8,
             textAlign: "center",
           }}
@@ -171,6 +201,66 @@ export default function Sidebar({ vista, onVista }) {
           </div>
         </div>
 
+        {/* ── Selector de Sede (igual que poc-rdam) ─────────── */}
+        <div
+          style={{
+            marginTop: 14,
+            padding: "0 2px",
+          }}
+        >
+          <label
+            htmlFor="sidebar-sede"
+            style={{
+              display: "block",
+              fontSize: 11,
+              color: "rgba(255,255,255,0.45)",
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: "0.6px",
+              fontWeight: 600,
+            }}
+          >
+            Sede
+          </label>
+          <select
+            id="sidebar-sede"
+            value={sede}
+            onChange={(e) => cambiarSede(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 6,
+              color: "#fff",
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              outline: "none",
+              transition: "border-color 0.2s ease, background 0.2s ease",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "rgba(37,99,235,0.6)";
+              e.target.style.background = "rgba(255,255,255,0.12)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "rgba(255,255,255,0.2)";
+              e.target.style.background = "rgba(255,255,255,0.08)";
+            }}
+          >
+            {SEDES.map((s) => (
+              <option
+                key={s.value}
+                value={s.value}
+                style={{ color: "#000", background: "#f0f0f0" }}
+              >
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Logout */}
         <button
           onClick={logout}
           className="sidebar-nav-item"
@@ -178,7 +268,7 @@ export default function Sidebar({ vista, onVista }) {
             width: "100%",
             background: "rgba(255,255,255,0.04)",
             borderRadius: 8,
-            marginTop: 6,
+            marginTop: 10,
             border: "1px solid rgba(255,255,255,0.07)",
           }}
         >
